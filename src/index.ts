@@ -1,6 +1,7 @@
 import Safe, { EthersAdapter } from "@safe-global/protocol-kit";
 import { ethers } from "ethers";
 import dotenv from "dotenv";
+import { SafeModuleTransaction } from "@safe-global/api-kit";
 
 dotenv.config();
 
@@ -8,18 +9,16 @@ async function main() {
   const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL!);
   const privateKey = process.env.WALLET_PRIVATE_KEY!;
   const wallet = new ethers.Wallet(privateKey, provider);
-  const deadline = (await provider.getBlock(47939585)).timestamp;
-
+  const deadline = (await provider.getBlock(47992954)).timestamp;
 
   /**
-   * Initalizing addresses 
+   * Initalizing addresses
    */
   const tokenAddress = process.env.TOKEN_ADDRESS;
   const predictionPoolAddress = process.env.PREDICTION_POOL_ADDRESS!;
   const permit2Address = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
   const aarcModuleAddress = "0x4EccF8A993E3B339bF977a1d55799418855a6F97";
   //   const polygonTokenAddress = "0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0";
-
 
   /**
    * Initializing ABIs
@@ -1549,11 +1548,13 @@ async function main() {
     permit2ABI,
     provider
   );
+
   const predictionPoolContract = new ethers.Contract(
     predictionPoolAddress,
     predictionPoolABI,
     wallet
   );
+
   const aarcModuleContract = new ethers.Contract(
     aarcModuleAddress,
     aarcModuleABI,
@@ -1569,14 +1570,14 @@ async function main() {
   });
   const safeAddress = process.env.SAFE_ADDRESS!;
   const safeSdk = await Safe.create({ ethAdapter, safeAddress });
- 
+
   const TOKEN_PERMISSIONS_TYPEHASH = ethers.utils.keccak256(
     ethers.utils.toUtf8Bytes("TokenPermissions(address token,uint256 amount)")
   );
   const tokenPermissionsHash = ethers.utils.keccak256(
     ethers.utils.defaultAbiCoder.encode(
       ["bytes32", "address", "uint256"],
-      [TOKEN_PERMISSIONS_TYPEHASH, tokenAddress, 10]
+      [TOKEN_PERMISSIONS_TYPEHASH, tokenAddress, 4]
     )
   );
   const PERMIT_TRANSFER_FROM_TYPEHASH = ethers.utils.keccak256(
@@ -1593,7 +1594,7 @@ async function main() {
       tokenPermissionsHash,
       aarcModuleAddress,
       0,
-      timestamp,
+      deadline,
     ]
   );
   const encodedDataHash = ethers.utils.keccak256(encodedData);
@@ -1603,13 +1604,14 @@ async function main() {
       [EIPHEADER, PERMIT2_DOMAIN_SEPARATOR, encodedDataHash]
     )
   );
+  const feeData = await provider.getFeeData();
   const safeDataToBeSigned = {
     to: aarcModuleAddress,
     data: transactionData,
     value: "0",
+    gasPrice: feeData.maxFeePerGas?.toString(),
+    safeTxGas: "0",
   };
-
-
   const ticketsData = predictionPoolContract.interface.encodeFunctionData(
     "buyTickets",
     [2, 1500000000000, 3]
@@ -1617,31 +1619,34 @@ async function main() {
   const safeTransaction = await safeSdk.createTransaction({
     safeTransactionData: safeDataToBeSigned,
   });
-  const isValidSafeTx = await safeSdk.isValidTransaction(
-    safeTransaction
-  );
+  // const signedSafeTransaction = await safeSdk.signTransaction(safeTransaction, 'eth_signTypedData')
+  // const txHash = await safeSdk.getTransactionHash(safeTransaction);
+  // const signature = await safeSdk.signTransactionHash(txHash);
+  // const txnResponse = await safeSdk.approveTransactionHash(txHash);
+  const isValidSafeTx = await safeSdk.isValidTransaction(safeTransaction);
   const sign = await safeSdk.signTypedData(safeTransaction);
-  const feeData = await provider.getFeeData();
+  // console.log(sign);
   const singlePermitData = aarcModuleContract.interface.encodeFunctionData(
     "executeSinglePermit",
     [
-      [[tokenAddress, 10], 0, deadline + 1000000, "0x"],
+      [[tokenAddress, 10], 0, deadline + 1000000, sign?.data],
       [[tokenAddress, predictionPoolAddress, 100]],
       [[predictionPoolAddress, ticketsData, 0]],
-      [[tokenAddress, "0xc5D15056Df341B47C3142efD5C0268AD3003c12c"]],
+      [[tokenAddress, predictionPoolAddress]],
     ]
   );
   const singlePermitSafeTransaction = await safeSdk.createTransaction({
     safeTransactionData: {
       to: aarcModuleAddress,
       data: singlePermitData,
-      value: "10",
+      value: "0",
+      gasPrice: feeData.maxFeePerGas?.toString(),
+      safeTxGas: "0",
     },
   });
   const isValidTx = await safeSdk.isValidTransaction(
     singlePermitSafeTransaction
   );
-  console.log("Transaction validity >>", isValidTx);
   const txResponse = await safeSdk.executeTransaction(
     singlePermitSafeTransaction,
     { gasPrice: feeData.maxFeePerGas?.toNumber(), gasLimit: 1000000 }
