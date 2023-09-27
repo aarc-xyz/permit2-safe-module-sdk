@@ -22,3 +22,6 @@ export const getFeeData = async (
   const feeData = provider.getFeeData();
   return feeData;
 };
+
+export const checkNativeAddress = (tokenAddress: string) =>
+  tokenAddress === "0x0000000000000000000000000000000000000000";

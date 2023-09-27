@@ -1,6 +1,6 @@
 import Safe, { EthersAdapter } from "@safe-global/protocol-kit";
-import { RPC_URL, WALLET_PRIVATE_KEY } from "../config";
-import { getProvider, getWallet } from "../utils";
+import { RPC_URL, WALLET_PRIVATE_KEY } from "../config/constants";
+import { getProvider, getWallet } from "../utils/utils";
 import { ethers } from "ethers";
 
 export async function createSafeSdk(safeAddress: string): Promise<Safe> {

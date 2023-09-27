@@ -1,35 +1,29 @@
 import { ethers, utils } from "ethers";
-import dotenv from "dotenv";
-import {
-  aarcModuleABI,
-  permit2ABI,
-  multiLotABI,
-  signLibraryABI,
-} from "./contracts/abi";
+import { aarcModuleABI, permit2ABI, signLibraryABI } from "./contracts/abi/abi";
 import { createSafeSdk } from "./services/SafeService";
 import {
   AARC_MODULE_CONTRACT_ADDRESS,
   PERMIT_2_ADDRESS,
-  MULTI_LOT_ADDRESS,
   RPC_URL,
   SIGN_LIBRARY_ADDRESS,
-  TOKEN_ADDRESS,
-} from "./config";
-import { getBlockTimestamp, getFeeData, getProvider } from "./utils";
+} from "./config/constants";
+import { checkNativeAddress, getFeeData, getProvider } from "./utils/utils";
 import { getTokenPermissionsHash } from "./services/TokenService";
+import { PERMIT_TRANSFER_FROM_TYPEHASH } from "./services/PermitService";
 
-dotenv.config();
-
-async function main(
+async function grantAllowance(
   safeAddress: string,
-  dappAddress: string, tokenAllowance: number, tokenAddress: string, deadline: number
+  dappAddress: string,
+  tokenAllowance: number,
+  tokenAddress: string,
+  deadline: number,
+  functionCallData?: string,
+  receiverAddress?: string
 ): Promise<void> {
   const { Interface } = utils;
-
   const provider = getProvider(RPC_URL);
   const feeData = await getFeeData(provider);
   const safeSdk = await createSafeSdk(safeAddress);
-  // const deadlineBlockTimestamp = getBlockTimestamp(provider, deadline);
 
   const permit2Contract = new ethers.Contract(
     PERMIT_2_ADDRESS,
@@ -38,9 +32,6 @@ async function main(
   );
 
   const iAarcModule = new Interface(aarcModuleABI);
-
-  const iMultiLot = new Interface(multiLotABI);
-
   const iSignLibrary = new Interface(signLibraryABI);
 
   const tokenPermissionsHash = await getTokenPermissionsHash(
@@ -48,13 +39,6 @@ async function main(
     tokenAllowance
   );
 
-  console.log("token permission hash", tokenPermissionsHash);
-
-  const PERMIT_TRANSFER_FROM_TYPEHASH = ethers.utils.keccak256(
-    ethers.utils.toUtf8Bytes(
-      "PermitTransferFrom(TokenPermissions permitted,address spender,uint256 nonce,uint256 deadline)TokenPermissions(address token,uint256 amount)"
-    )
-  );
   const PERMIT2_DOMAIN_SEPARATOR = await permit2Contract.DOMAIN_SEPARATOR();
   const EIPHEADER = "\x19\x01";
   const encodedData = ethers.utils.defaultAbiCoder.encode(
@@ -75,10 +59,8 @@ async function main(
     )
   );
 
-  console.log("transaction data", transactionData);
-
   const signMessageData = iSignLibrary.encodeFunctionData("signMessage", [
-    transactionData
+    transactionData,
   ]);
 
   const safeDataToBeSigned = {
@@ -88,13 +70,6 @@ async function main(
     gasPrice: feeData.maxFeePerGas?.toString(),
     operation: 1,
   };
-  
-  const functionCallData = iMultiLot.encodeFunctionData(
-    "joinLot",
-    [5995, "snpcrudeoil", 20000000]
-  );
-
-  console.log("function call data", functionCallData);
 
   const signTransaction = await safeSdk.createTransaction({
     safeTransactionData: safeDataToBeSigned,
@@ -105,40 +80,39 @@ async function main(
     gasLimit: 1000000,
   });
 
-  console.log(signResponse);
-
   await signResponse.transactionResponse?.wait();
 
+  const tokenDistributionDetails = receiverAddress
+    ? [tokenAddress, receiverAddress]
+    : null;
 
   const singlePermitData = iAarcModule.encodeFunctionData(
     "executeSinglePermit",
     [
       [[tokenAddress, tokenAllowance], 0, deadline, "0x"],
-      [[tokenAddress, MULTI_LOT_ADDRESS, tokenAllowance]],
-      [[MULTI_LOT_ADDRESS, functionCallData, 0]],
-      [[tokenAddress, MULTI_LOT_ADDRESS]],
+      [[tokenAddress, dappAddress, tokenAllowance]],
+      [[dappAddress, functionCallData, 0]],
+      [tokenDistributionDetails],
     ]
   );
+
   const singlePermitSafeTransaction = await safeSdk.createTransaction({
     safeTransactionData: {
       to: AARC_MODULE_CONTRACT_ADDRESS,
       data: singlePermitData,
-      value: "0",
+      value: checkNativeAddress(tokenAddress) ? tokenAllowance.toString() : "0",
       gasPrice: feeData.maxFeePerGas?.toString(),
     },
   });
+
   const txResponse = await safeSdk.executeTransaction(
     singlePermitSafeTransaction,
     { gasPrice: feeData.maxFeePerGas?.toNumber(), gasLimit: 1000000 }
   );
-  console.log(txResponse);
+
   await txResponse.transactionResponse?.wait();
 }
 
-main(
-  "0x93c0388CD82B9327BbCa9Cebe98CAa719ba047C1",
-  "",
-  200000000,
-  "0xebAFe0Dc33d03976AC497a33079dC374018C9dE2",
-  1727697547
-)
+module.exports = {
+  grantAllowance
+}
