@@ -3,14 +3,14 @@ import dotenv from "dotenv";
 import {
   aarcModuleABI,
   permit2ABI,
-  predictionPoolABI,
+  multiLotABI,
   signLibraryABI,
 } from "./contracts/abi";
 import { createSafeSdk } from "./services/SafeService";
 import {
   AARC_MODULE_CONTRACT_ADDRESS,
   PERMIT_2_ADDRESS,
-  PREDICTION_POOL_ADDRESS,
+  MULTI_LOT_ADDRESS,
   RPC_URL,
   SIGN_LIBRARY_ADDRESS,
   TOKEN_ADDRESS,
@@ -22,14 +22,14 @@ dotenv.config();
 
 async function main(
   safeAddress: string,
-  { dappAddress, tokenAllowance, tokenAddress, deadline }: any
+  dappAddress: string, tokenAllowance: number, tokenAddress: string, deadline: number
 ): Promise<void> {
   const { Interface } = utils;
 
   const provider = getProvider(RPC_URL);
   const feeData = await getFeeData(provider);
   const safeSdk = await createSafeSdk(safeAddress);
-  const deadlineBlockTimestamp = getBlockTimestamp(provider, deadline);
+  // const deadlineBlockTimestamp = getBlockTimestamp(provider, deadline);
 
   const permit2Contract = new ethers.Contract(
     PERMIT_2_ADDRESS,
@@ -39,14 +39,16 @@ async function main(
 
   const iAarcModule = new Interface(aarcModuleABI);
 
-  const ipredictionPool = new Interface(predictionPoolABI);
+  const iMultiLot = new Interface(multiLotABI);
 
   const iSignLibrary = new Interface(signLibraryABI);
 
-  const tokenPermissionsHash = getTokenPermissionsHash(
+  const tokenPermissionsHash = await getTokenPermissionsHash(
     tokenAddress,
     tokenAllowance
   );
+
+  console.log("token permission hash", tokenPermissionsHash);
 
   const PERMIT_TRANSFER_FROM_TYPEHASH = ethers.utils.keccak256(
     ethers.utils.toUtf8Bytes(
@@ -62,7 +64,7 @@ async function main(
       tokenPermissionsHash,
       AARC_MODULE_CONTRACT_ADDRESS,
       0,
-      deadlineBlockTimestamp,
+      deadline,
     ]
   );
   const encodedDataHash = ethers.utils.keccak256(encodedData);
@@ -73,8 +75,10 @@ async function main(
     )
   );
 
+  console.log("transaction data", transactionData);
+
   const signMessageData = iSignLibrary.encodeFunctionData("signMessage", [
-    transactionData,
+    transactionData
   ]);
 
   const safeDataToBeSigned = {
@@ -84,6 +88,13 @@ async function main(
     gasPrice: feeData.maxFeePerGas?.toString(),
     operation: 1,
   };
+  
+  const functionCallData = iMultiLot.encodeFunctionData(
+    "joinLot",
+    [5995, "snpcrudeoil", 20000000]
+  );
+
+  console.log("function call data", functionCallData);
 
   const signTransaction = await safeSdk.createTransaction({
     safeTransactionData: safeDataToBeSigned,
@@ -94,20 +105,18 @@ async function main(
     gasLimit: 1000000,
   });
 
+  console.log(signResponse);
+
   await signResponse.transactionResponse?.wait();
 
-  const ticketsData = ipredictionPool.encodeFunctionData(
-    "buyTickets",
-    [2, 1500000000000, 3]
-  );
 
   const singlePermitData = iAarcModule.encodeFunctionData(
     "executeSinglePermit",
     [
       [[tokenAddress, tokenAllowance], 0, deadline, "0x"],
-      [[tokenAddress, PREDICTION_POOL_ADDRESS, 100]],
-      [[PREDICTION_POOL_ADDRESS, ticketsData, 0]],
-      [[tokenAddress, PREDICTION_POOL_ADDRESS]],
+      [[tokenAddress, MULTI_LOT_ADDRESS, tokenAllowance]],
+      [[MULTI_LOT_ADDRESS, functionCallData, 0]],
+      [[tokenAddress, MULTI_LOT_ADDRESS]],
     ]
   );
   const singlePermitSafeTransaction = await safeSdk.createTransaction({
@@ -122,5 +131,14 @@ async function main(
     singlePermitSafeTransaction,
     { gasPrice: feeData.maxFeePerGas?.toNumber(), gasLimit: 1000000 }
   );
+  console.log(txResponse);
   await txResponse.transactionResponse?.wait();
 }
+
+main(
+  "0x93c0388CD82B9327BbCa9Cebe98CAa719ba047C1",
+  "",
+  200000000,
+  "0xebAFe0Dc33d03976AC497a33079dC374018C9dE2",
+  1727697547
+)
