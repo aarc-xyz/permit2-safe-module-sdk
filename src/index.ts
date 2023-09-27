@@ -15,29 +15,27 @@ import {
   SIGN_LIBRARY_ADDRESS,
   TOKEN_ADDRESS,
 } from "./config";
-import { getBlockTimestamp, getProvider } from "./utils";
+import { getBlockTimestamp, getFeeData, getProvider } from "./utils";
 import { getTokenPermissionsHash } from "./services/TokenService";
 
 dotenv.config();
 
 async function main(
   safeAddress: string,
-  { dappAddress, tokenAllowance, tokenAddress, deadline }
+  { dappAddress, tokenAllowance, tokenAddress, deadline }: any
 ): Promise<void> {
   const { Interface } = utils;
 
   const provider = getProvider(RPC_URL);
+  const feeData = await getFeeData(provider);
   const safeSdk = await createSafeSdk(safeAddress);
+  const deadlineBlockTimestamp = getBlockTimestamp(provider, deadline);
 
   const permit2Contract = new ethers.Contract(
     PERMIT_2_ADDRESS,
     permit2ABI,
     provider
   );
-
-  const feeData = await provider.getFeeData();
-
-  const deadlineBlockTimestamp = getBlockTimestamp(provider, deadline);
 
   const iAarcModule = new Interface(aarcModuleABI);
 
@@ -92,7 +90,7 @@ async function main(
   });
 
   const signResponse = await safeSdk.executeTransaction(signTransaction, {
-    gasPrice: feeData.maxFeePerGas?.toNumber(),
+    gasPrice: feeData?.maxFeePerGas?.toNumber(),
     gasLimit: 1000000,
   });
 
