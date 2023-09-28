@@ -95,7 +95,7 @@ async function grantAllowance(
     "executeSinglePermit",
     [
       [[tokenAddress, tokenAllowance], 0, deadline, "0x"],
-      [[tokenAddress, dappAddress, tokenAllowance]],
+      [[dappAddress, tokenAddress, tokenAllowance]],
       [[dappAddress, functionCallData, 0]],
       [[tokenDistributionDetails]],
     ]
