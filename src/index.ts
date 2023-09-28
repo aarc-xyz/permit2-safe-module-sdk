@@ -1,4 +1,4 @@
-import { ethers, utils } from "ethers";
+import { ethers, Signer, utils } from "ethers";
 import { aarcModuleABI, permit2ABI, signLibraryABI } from "./contracts/abi/abi";
 import { createSafeSdk } from "./services/SafeService";
 import {
@@ -7,11 +7,16 @@ import {
   RPC_URL,
   SIGN_LIBRARY_ADDRESS,
 } from "./config/constants";
-import { checkNativeAddress, getFeeData, getProvider } from "./utils/utils";
+import {
+  checkNativeAddress,
+  getFeeData,
+  getProvider,
+} from "./utils/utils";
 import { getTokenPermissionsHash } from "./services/TokenService";
 import { PERMIT_TRANSFER_FROM_TYPEHASH } from "./services/PermitService";
 
 async function grantAllowance(
+  signer: Signer,
   safeAddress: string,
   dappAddress: string,
   tokenAllowance: number,
@@ -23,7 +28,7 @@ async function grantAllowance(
   const { Interface } = utils;
   const provider = getProvider(RPC_URL);
   const feeData = await getFeeData(provider);
-  const safeSdk = await createSafeSdk(safeAddress);
+  const safeSdk = await createSafeSdk(signer, safeAddress);
 
   const permit2Contract = new ethers.Contract(
     PERMIT_2_ADDRESS,
@@ -92,7 +97,7 @@ async function grantAllowance(
       [[tokenAddress, tokenAllowance], 0, deadline, "0x"],
       [[tokenAddress, dappAddress, tokenAllowance]],
       [[dappAddress, functionCallData, 0]],
-      [tokenDistributionDetails],
+      [[tokenDistributionDetails]],
     ]
   );
 
@@ -114,5 +119,5 @@ async function grantAllowance(
 }
 
 module.exports = {
-  grantAllowance
-}
+  grantAllowance,
+};
