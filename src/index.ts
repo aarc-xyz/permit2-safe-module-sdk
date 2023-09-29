@@ -44,6 +44,8 @@ async function grantAllowance(
     tokenAllowance
   );
 
+  const nonce = 2;
+
   const PERMIT2_DOMAIN_SEPARATOR = await permit2Contract.DOMAIN_SEPARATOR();
   const EIPHEADER = "\x19\x01";
   const encodedData = ethers.utils.defaultAbiCoder.encode(
@@ -52,7 +54,7 @@ async function grantAllowance(
       PERMIT_TRANSFER_FROM_TYPEHASH,
       tokenPermissionsHash,
       AARC_MODULE_CONTRACT_ADDRESS,
-      0,
+      nonce,
       deadline,
     ]
   );
@@ -81,7 +83,7 @@ async function grantAllowance(
   });
 
   const signResponse = await safeSdk.executeTransaction(signTransaction, {
-    gasPrice: feeData?.maxFeePerGas?.toNumber(),
+    gasPrice: feeData.maxFeePerGas?.toNumber(),
     gasLimit: 1000000,
   });
 
@@ -94,10 +96,10 @@ async function grantAllowance(
   const singlePermitData = iAarcModule.encodeFunctionData(
     "executeSinglePermit",
     [
-      [[tokenAddress, tokenAllowance], 0, deadline, "0x"],
+      [[tokenAddress, tokenAllowance], nonce, deadline, "0x"],
       [[dappAddress, tokenAddress, tokenAllowance]],
       [[dappAddress, functionCallData, 0]],
-      [[tokenDistributionDetails]],
+      [tokenDistributionDetails],
     ]
   );
 
