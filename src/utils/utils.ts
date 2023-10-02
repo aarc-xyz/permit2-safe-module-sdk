@@ -1,7 +1,11 @@
 import { ethers } from "ethers";
 
-export const getProvider = (rpcUrl: string): ethers.providers.JsonRpcProvider =>
-  new ethers.providers.JsonRpcProvider(rpcUrl);
+export const getProvider = (
+  rpcUrl: string
+): ethers.providers.JsonRpcProvider => {
+  console.log(rpcUrl);
+  return new ethers.providers.JsonRpcProvider(rpcUrl);
+};
 
 export const getWallet = (
   privateKey: string,

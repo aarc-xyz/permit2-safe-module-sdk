@@ -7,13 +7,13 @@ import {
   RPC_URL,
   SIGN_LIBRARY_ADDRESS,
 } from "./config/constants";
-import {
-  checkNativeAddress,
-  getFeeData,
-  getProvider,
-} from "./utils/utils";
+import { checkNativeAddress, getFeeData, getProvider } from "./utils/utils";
 import { getTokenPermissionsHash } from "./services/TokenService";
 import { PERMIT_TRANSFER_FROM_TYPEHASH } from "./services/PermitService";
+import { TransactionResult } from "@safe-global/safe-core-sdk-types";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 async function grantAllowance(
   signer: Signer,
@@ -24,9 +24,11 @@ async function grantAllowance(
   deadline: number,
   functionCallData?: string,
   receiverAddress?: string
-): Promise<void> {
+): Promise<TransactionResult> {
   const { Interface } = utils;
-  const provider = getProvider(RPC_URL);
+  const provider = getProvider(
+    "https://polygon-mainnet.infura.io/v3/05b57693b8064e309ae6d5a2242067a5"
+  );
   const feeData = await getFeeData(provider);
   const safeSdk = await createSafeSdk(signer, safeAddress);
 
@@ -91,7 +93,7 @@ async function grantAllowance(
 
   const tokenDistributionDetails = receiverAddress
     ? [tokenAddress, receiverAddress]
-    : null;
+    : [ethers.constants.AddressZero, ethers.constants.AddressZero];
 
   const singlePermitData = iAarcModule.encodeFunctionData(
     "executeSinglePermit",
@@ -118,6 +120,8 @@ async function grantAllowance(
   );
 
   await txResponse.transactionResponse?.wait();
+
+  return txResponse;
 }
 
 module.exports = {
